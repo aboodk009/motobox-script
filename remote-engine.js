@@ -14,6 +14,11 @@ function highlightAndCheckDuplicates() {
   // 1. قراءة جميع بطاقات الطلبات من واجهة Kanban
   const orders = getOrdersFromCards();
 
+  // 🔍 طباعة عدد الطلبات المكتشفة في Console للتشخيص التلقائي
+  if (orders.length > 0) {
+    console.log(`📦 إجمالي الطلبات المكتشفة في الصفحة: ${orders.length}`, orders);
+  }
+
   // 2. تجميع الطلبات بناءً على (الاسم + رقم الهاتف) لتحديد التكرار
   const customerToOrdersMap = {};
 
@@ -41,6 +46,8 @@ function highlightAndCheckDuplicates() {
   // 3. التكرار يعتمد فقط على وجود أكثر من طلب (أكثر من بطاقة) لنفس الزبون
   for (const [customerKey, data] of Object.entries(customerToOrdersMap)) {
     if (data.codes.length > 1) {
+      console.log(`⚠️ تم كشف طلب مكرر للعميل: ${data.name} (${data.phone}) - الأكواد:`, data.codes);
+
       // الأكواد تُستخدم فقط كبصمة للتخزين بالذاكرة
       const sortedCodes = [...data.codes].sort().join("_");
       const orderFingerprint = `${customerKey}___${sortedCodes}`;
@@ -186,17 +193,17 @@ function repositionToasts() {
   });
 }
 
-// 🎯 دالة جديدة مفصلة لقراءة بطاقات الصورة بدقة
+// 🎯 دالة قراءة الكروت المرنة
 function getOrdersFromCards() {
   const orders = [];
-  // البحث في البطاقات داخل أسطر أو أعمدة لوحة الكانبان
-  const allElements = document.querySelectorAll('div, tr, section');
 
-  allElements.forEach((el, index) => {
-    // الفحص فقط للبطاقات التي تحتوي كود يبدأ بـ # ورقم هاتف
+  // استهداف جميع العناصر المحتملة للبطاقات
+  const allElements = document.querySelectorAll('div[class*="card"], div[class*="item"], div[class*="order"], tr, section');
+
+  allElements.forEach((el) => {
     const text = el.innerText || "";
 
-    if (text.includes('#') && (text.includes('SYP') || text.includes('COD') || text.includes('WALLET'))) {
+    if (text.includes('#')) {
       const phoneMatch = text.match(/(?:\+|00)?\d{8,15}/);
       const codeMatch = text.match(/#[A-Za-z0-9-]+/i);
 
@@ -204,7 +211,6 @@ function getOrdersFromCards() {
         const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
         const code = codeMatch[0];
 
-        // استخراج اسم الزبون من السطر المفصول بـ (-) مثل "سعيد حريري - +96395..."
         let customerName = "عميل";
         const lines = text.split('\n');
 
@@ -222,8 +228,7 @@ function getOrdersFromCards() {
           }
         }
 
-        // تجنب تكرار قراءة الحاويات الكبيرة
-        const isAlreadyAdded = orders.some(o => o.code === code && o.phone === cleanPhone);
+        const isAlreadyAdded = orders.some(o => o.code === code);
         if (!isAlreadyAdded) {
           orders.push({
             phone: cleanPhone,
@@ -238,5 +243,6 @@ function getOrdersFromCards() {
   return orders;
 }
 
-// الفحص كل 3 ثوانٍ
+// البدء المباشر والفحص الدوري كل 3 ثوانٍ
+highlightAndCheckDuplicates();
 setInterval(highlightAndCheckDuplicates, 3000);
