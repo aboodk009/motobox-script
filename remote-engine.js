@@ -1,43 +1,50 @@
-// ==========================================
-// 🚀 المحرك الخارجي لإضافة Motobox
-// هذا الكود يتم تحديثه من السيرفر مباشرة
-// ==========================================
-
+// 📝 قائمة الاستثناءات: حساب تعويض والرقم المخصص
 const excludedIdentifiers = ["تعويض", "0945555128"];
 
 function highlightAndCheckDuplicates() {
   const currentUrl = window.location.href.toLowerCase();
-  
-  // التحقق من أن المستخدم في صفحة الطلبات المباشرة
-  if (!currentUrl.includes("app.motoboxapp.com/public/admin/live-orders")) return;
 
+  // 🎯 الرابط الوحيد المسموح بتشغيل السكريبت عليه
+  const targetPageUrl = "app.motoboxapp.com/public/admin/live-orders";
+
+  if (!currentUrl.includes(targetPageUrl)) {
+    return;
+  }
+
+  // 1. قراءة جميع بطاقات الطلبات من واجهة Kanban
   const orders = getOrdersFromCards();
+
+  // 2. تجميع الطلبات بناءً على (الاسم + رقم الهاتف) لتحديد التكرار
   const customerToOrdersMap = {};
 
   orders.forEach(order => {
+    // استثناء إذا كان الاسم أو الرقم ضمن قائمة الاستثناءات
     const isExcluded = excludedIdentifiers.some(id => 
       order.phone.includes(id) || order.name.includes(id)
     );
 
     if (!isExcluded) {
       const customerKey = `${order.name}___${order.phone}`;
+      
       if (!customerToOrdersMap[customerKey]) {
         customerToOrdersMap[customerKey] = {
           phone: order.phone,
           name: order.name,
-          orderCount: 0,
           codes: []
         };
       }
-      customerToOrdersMap[customerKey].orderCount += 1;
+
       customerToOrdersMap[customerKey].codes.push(order.code);
     }
   });
 
+  // 3. التكرار يعتمد فقط على وجود أكثر من طلب (أكثر من بطاقة) لنفس الزبون
   for (const [customerKey, data] of Object.entries(customerToOrdersMap)) {
-    if (data.orderCount > 1) {
+    if (data.codes.length > 1) {
+      // الأكواد تُستخدم فقط كبصمة للتخزين بالذاكرة
       const sortedCodes = [...data.codes].sort().join("_");
-      const orderFingerprint = `${customerKey}___count_${data.orderCount}___${sortedCodes}`;
+      const orderFingerprint = `${customerKey}___${sortedCodes}`;
+
       handleNotificationLifecycle(data.phone, data.name, orderFingerprint);
     }
   }
@@ -45,21 +52,40 @@ function highlightAndCheckDuplicates() {
 
 function handleNotificationLifecycle(phone, name, fingerprint) {
   const storageKey = `notified_perm_${fingerprint}`;
-  const DURATION = 60000; // دقيقة كاملة
+  const DURATION = 30000; // 30 ثانية
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
 
-  if (localStorage.getItem(storageKey)) return;
+  const savedTime = localStorage.getItem(storageKey);
 
+  if (savedTime) {
+    // إذا مرت أكثر من 24 ساعة، يتم مسح السجل القديم لتفعيل التنبيه مجدداً
+    if (Date.now() - parseInt(savedTime, 10) > TWENTY_FOUR_HOURS) {
+      localStorage.removeItem(storageKey);
+    } else {
+      return; // عدم التكرار إذا لم تتجاوز المدة 24 ساعة
+    }
+  }
+
+  // 🟢 حفظ البصمة مع الوقت الحالي
   localStorage.setItem(storageKey, Date.now());
+
+  // تشغيل الصوت المزدوج المتناسق
+  playHarmonicDoubleBeep();
+
+  // إظهار الإشعار الداخلي الأحمر
   showInPageToast(phone, name, fingerprint, DURATION);
 }
 
+// 🔊 دالة تشغيل الصوت المزدوج
 function playHarmonicDoubleBeep() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
 
     const playTone = (freq, startTime, duration) => {
       const osc = ctx.createOscillator();
@@ -81,6 +107,7 @@ function playHarmonicDoubleBeep() {
   }
 }
 
+// 🔔 دالة الإشعار الداخلي
 function showInPageToast(phone, name, fingerprint, duration) {
   const toastId = `toast-duplicate-${fingerprint}`;
   if (document.getElementById(toastId)) return;
@@ -91,69 +118,54 @@ function showInPageToast(phone, name, fingerprint, duration) {
   
   const titleDiv = document.createElement("div");
   titleDiv.style.cssText = "font-size: 15px; font-weight: bold; margin-bottom: 4px; text-align: center;";
-  titleDiv.textContent = `🔥 تجربة التحديث المباشر للعميل ${name} (${phone})`;
+  titleDiv.textContent = `⚠️ تنبيه: تم اكتشاف طلب مكرر للعميل ${name} (${phone})`;
 
-  // إصلاح الخطأ: إنشاء عنصر subDiv بشكل صحيح
   const subDiv = document.createElement("div");
   subDiv.style.cssText = "font-size: 11px; opacity: 0.9; font-weight: normal; text-align: center;";
-  subDiv.textContent = `اختبار التحديث السريع من GitHub!`;
+  subDiv.textContent = `سيختفي هذا التنبيه بعد 30 ثانية`;
 
   const textContainer = document.createElement("div");
   textContainer.style.cssText = "flex: 1; text-align: center;";
   textContainer.appendChild(titleDiv);
   textContainer.appendChild(subDiv);
 
-  const refreshBtn = document.createElement("span");
-  refreshBtn.textContent = "🔄";
-  refreshBtn.title = "تحديث وإعادة الفحص";
-  refreshBtn.style.cssText = "cursor: pointer; font-size: 16px; padding: 0 4px; opacity: 0.9;";
-  refreshBtn.onclick = () => {
-    localStorage.removeItem(`notified_perm_${fingerprint}`);
-    removeToast(toast);
-    highlightAndCheckDuplicates();
-  };
-
   const closeBtn = document.createElement("span");
   closeBtn.textContent = "✕";
   closeBtn.style.cssText = "cursor: pointer; font-size: 18px; font-weight: bold; padding: 0 5px; opacity: 0.8;";
-  closeBtn.onclick = () => removeToast(toast);
-
-  const actionContainer = document.createElement("div");
-  actionContainer.style.cssText = "display: flex; align-items: center; gap: 8px;";
-  actionContainer.appendChild(refreshBtn);
-  actionContainer.appendChild(closeBtn);
+  closeBtn.onclick = () => {
+    removeToast(toast);
+  };
 
   const innerLayout = document.createElement("div");
   innerLayout.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%;";
   innerLayout.appendChild(textContainer);
-  innerLayout.appendChild(actionContainer);
+  innerLayout.appendChild(closeBtn);
 
   toast.appendChild(innerLayout);
 
   toast.style.cssText = `
-    position: fixed; left: 50%; transform: translateX(-50%);
-    background-color: #d9534f; color: white; padding: 12px 22px;
-    border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-    z-index: 999999; direction: rtl; text-align: center; min-width: 340px;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #d9534f;
+    color: white;
+    padding: 12px 22px;
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    z-index: 999999;
+    direction: rtl;
+    text-align: center;
+    min-width: 340px;
     transition: all 0.3s ease;
   `;
 
   document.body.appendChild(toast);
   repositionToasts();
 
-  playHarmonicDoubleBeep();
-
-  const soundInterval = setInterval(() => {
-    if (document.getElementById(toastId)) {
-      playHarmonicDoubleBeep();
-    } else {
-      clearInterval(soundInterval);
-    }
-  }, 15000);
-
   setTimeout(() => {
-    clearInterval(soundInterval);
-    if (document.getElementById(toastId)) removeToast(toast);
+    if (document.getElementById(toastId)) {
+      removeToast(toast);
+    }
   }, duration);
 }
 
@@ -174,12 +186,16 @@ function repositionToasts() {
   });
 }
 
+// 🎯 دالة جديدة مفصلة لقراءة بطاقات الصورة بدقة
 function getOrdersFromCards() {
   const orders = [];
-  const cardElements = document.querySelectorAll('div[class*="card"], div[class*="item"], div[class*="order"]');
+  // البحث في البطاقات داخل أسطر أو أعمدة لوحة الكانبان
+  const allElements = document.querySelectorAll('div, tr, section');
 
-  cardElements.forEach((el) => {
+  allElements.forEach((el, index) => {
+    // الفحص فقط للبطاقات التي تحتوي كود يبدأ بـ # ورقم هاتف
     const text = el.innerText || "";
+
     if (text.includes('#') && (text.includes('SYP') || text.includes('COD') || text.includes('WALLET'))) {
       const phoneMatch = text.match(/(?:\+|00)?\d{8,15}/);
       const codeMatch = text.match(/#[A-Za-z0-9-]+/i);
@@ -187,6 +203,8 @@ function getOrdersFromCards() {
       if (phoneMatch && codeMatch) {
         const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
         const code = codeMatch[0];
+
+        // استخراج اسم الزبون من السطر المفصول بـ (-) مثل "سعيد حريري - +96395..."
         let customerName = "عميل";
         const lines = text.split('\n');
 
@@ -203,7 +221,16 @@ function getOrdersFromCards() {
             break;
           }
         }
-        orders.push({ phone: cleanPhone, name: customerName, code: code });
+
+        // تجنب تكرار قراءة الحاويات الكبيرة
+        const isAlreadyAdded = orders.some(o => o.code === code && o.phone === cleanPhone);
+        if (!isAlreadyAdded) {
+          orders.push({
+            phone: cleanPhone,
+            name: customerName,
+            code: code
+          });
+        }
       }
     }
   });
@@ -211,6 +238,5 @@ function getOrdersFromCards() {
   return orders;
 }
 
-// البدء بالفحص المباشر
-highlightAndCheckDuplicates();
+// الفحص كل 3 ثوانٍ
 setInterval(highlightAndCheckDuplicates, 3000);
