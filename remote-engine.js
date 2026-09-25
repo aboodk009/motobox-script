@@ -7,9 +7,9 @@ const excludedIdentifiers = ["تعويض", "0945555128"];
 
 function highlightAndCheckDuplicates() {
   const currentUrl = window.location.href.toLowerCase();
-  const targetPageUrl = "app.motoboxapp.com/public/admin/live-orders";
-
-  if (!currentUrl.includes(targetPageUrl)) return;
+  
+  // التحقق من أن المستخدم في صفحة الطلبات المباشرة
+  if (!currentUrl.includes("app.motoboxapp.com/public/admin/live-orders")) return;
 
   const orders = getOrdersFromCards();
   const customerToOrdersMap = {};
@@ -92,6 +92,9 @@ function showInPageToast(phone, name, fingerprint, duration) {
   const titleDiv = document.createElement("div");
   titleDiv.style.cssText = "font-size: 15px; font-weight: bold; margin-bottom: 4px; text-align: center;";
   titleDiv.textContent = `🔥 تجربة التحديث المباشر للعميل ${name} (${phone})`;
+
+  // إصلاح الخطأ: إنشاء عنصر subDiv بشكل صحيح
+  const subDiv = document.createElement("div");
   subDiv.style.cssText = "font-size: 11px; opacity: 0.9; font-weight: normal; text-align: center;";
   subDiv.textContent = `اختبار التحديث السريع من GitHub!`;
 
@@ -208,5 +211,6 @@ function getOrdersFromCards() {
   return orders;
 }
 
+// البدء بالفحص المباشر
 highlightAndCheckDuplicates();
 setInterval(highlightAndCheckDuplicates, 3000);
