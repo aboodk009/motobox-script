@@ -3,17 +3,22 @@ const excludedIdentifiers = ["تعويض", "0945555128"];
 
 function highlightAndCheckDuplicates() {
   const currentUrl = window.location.href.toLowerCase();
+
+  // 🎯 الرابط الوحيد المسموح بتشغيل السكريبت عليه
   const targetPageUrl = "app.motoboxapp.com/public/admin/live-orders";
 
-  if (!currentUrl.includes(targetPageUrl)) return;
+  if (!currentUrl.includes(targetPageUrl)) {
+    return;
+  }
 
+  // 1. قراءة جميع بطاقات الطلبات من واجهة Kanban
   const orders = getOrdersFromCards();
 
-  console.log(`📦 إجمالي الطلبات المكتشفة في الصفحة: ${orders.length}`, orders);
-
+  // 2. تجميع الطلبات بناءً على (الاسم + رقم الهاتف) لتحديد التكرار
   const customerToOrdersMap = {};
 
   orders.forEach(order => {
+    // استثناء إذا كان الاسم أو الرقم ضمن قائمة الاستثناءات
     const isExcluded = excludedIdentifiers.some(id => 
       order.phone.includes(id) || order.name.includes(id)
     );
@@ -33,10 +38,10 @@ function highlightAndCheckDuplicates() {
     }
   });
 
+  // 3. التكرار يعتمد فقط على وجود أكثر من طلب (أكثر من بطاقة) لنفس الزبون
   for (const [customerKey, data] of Object.entries(customerToOrdersMap)) {
     if (data.codes.length > 1) {
-      console.log(`⚠️ تم كشف طلب مكرر للعميل: ${data.name} (${data.phone}) - الأكواد:`, data.codes);
-
+      // الأكواد تُستخدم فقط كبصمة للتخزين بالذاكرة
       const sortedCodes = [...data.codes].sort().join("_");
       const orderFingerprint = `${customerKey}___${sortedCodes}`;
 
@@ -47,31 +52,40 @@ function highlightAndCheckDuplicates() {
 
 function handleNotificationLifecycle(phone, name, fingerprint) {
   const storageKey = `notified_perm_${fingerprint}`;
-  const DURATION = 30000;
-  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  const DURATION = 30000; // 30 ثانية
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
 
   const savedTime = localStorage.getItem(storageKey);
 
   if (savedTime) {
+    // إذا مرت أكثر من 24 ساعة، يتم مسح السجل القديم لتفعيل التنبيه مجدداً
     if (Date.now() - parseInt(savedTime, 10) > TWENTY_FOUR_HOURS) {
       localStorage.removeItem(storageKey);
     } else {
-      return; 
+      return; // عدم التكرار إذا لم تتجاوز المدة 24 ساعة
     }
   }
 
+  // 🟢 حفظ البصمة مع الوقت الحالي
   localStorage.setItem(storageKey, Date.now());
+
+  // تشغيل الصوت المزدوج المتناسق
   playHarmonicDoubleBeep();
+
+  // إظهار الإشعار الداخلي الأحمر
   showInPageToast(phone, name, fingerprint, DURATION);
 }
 
+// 🔊 دالة تشغيل الصوت المزدوج
 function playHarmonicDoubleBeep() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
 
     const playTone = (freq, startTime, duration) => {
       const osc = ctx.createOscillator();
@@ -93,6 +107,7 @@ function playHarmonicDoubleBeep() {
   }
 }
 
+// 🔔 دالة الإشعار الداخلي
 function showInPageToast(phone, name, fingerprint, duration) {
   const toastId = `toast-duplicate-${fingerprint}`;
   if (document.getElementById(toastId)) return;
@@ -117,7 +132,9 @@ function showInPageToast(phone, name, fingerprint, duration) {
   const closeBtn = document.createElement("span");
   closeBtn.textContent = "✕";
   closeBtn.style.cssText = "cursor: pointer; font-size: 18px; font-weight: bold; padding: 0 5px; opacity: 0.8;";
-  closeBtn.onclick = () => removeToast(toast);
+  closeBtn.onclick = () => {
+    removeToast(toast);
+  };
 
   const innerLayout = document.createElement("div");
   innerLayout.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%;";
@@ -127,10 +144,18 @@ function showInPageToast(phone, name, fingerprint, duration) {
   toast.appendChild(innerLayout);
 
   toast.style.cssText = `
-    position: fixed; left: 50%; transform: translateX(-50%);
-    background-color: #d9534f; color: white; padding: 12px 22px;
-    border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-    z-index: 999999; direction: rtl; text-align: center; min-width: 340px;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #d9534f;
+    color: white;
+    padding: 12px 22px;
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    z-index: 999999;
+    direction: rtl;
+    text-align: center;
+    min-width: 340px;
     transition: all 0.3s ease;
   `;
 
@@ -138,7 +163,9 @@ function showInPageToast(phone, name, fingerprint, duration) {
   repositionToasts();
 
   setTimeout(() => {
-    if (document.getElementById(toastId)) removeToast(toast);
+    if (document.getElementById(toastId)) {
+      removeToast(toast);
+    }
   }, duration);
 }
 
@@ -159,43 +186,50 @@ function repositionToasts() {
   });
 }
 
-// 🎯 دالة القراءة المضمونة 100% المستندة إلى نص الصورة
+// 🎯 دالة القراءة المعدلة (تعتمد على كودك الأصلي مع تصحيح شروط الشاشة)
 function getOrdersFromCards() {
   const orders = [];
-  // البحث في كل العناصر ذات الحجم الصغير والمتوسط
-  const elements = document.querySelectorAll('div, li, section');
+  const allElements = document.querySelectorAll('div, tr, section');
 
-  elements.forEach((el) => {
-    // التأكد من أن العنصر بطاقة منفردة وليس الحاوية الكاملة
-    if (el.children.length < 10 && el.children.length > 0) {
-      const text = el.innerText || "";
+  allElements.forEach((el) => {
+    const text = el.innerText || "";
 
-      // الشرط: وجود رمز # وبدء رقم الهاتف بـ 963 أو 09 أو وجود +
-      if (text.includes('#') && (text.includes('963') || text.includes('09') || text.includes('+'))) {
-        const codeMatch = text.match(/#[A-Za-z0-9]+/i);
-        const phoneMatch = text.match(/(?:\+|00)?963\d{8,10}|09\d{8}/);
+    // الفحص يعتمد على وجود رمز # ورقم هاتف (تم إزالة شرط SYP/COD لضمان عدم تفويت العمود الأول)
+    if (text.includes('#') && (text.includes('+') || text.match(/\d{8,}/))) {
+      const phoneMatch = text.match(/(?:\+|00)?\d{8,15}/);
+      const codeMatch = text.match(/#[A-Za-z0-9-]+/i);
 
-        if (codeMatch && phoneMatch) {
-          const code = codeMatch[0];
-          const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
+      if (phoneMatch && codeMatch) {
+        const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
+        const code = codeMatch[0];
 
-          let customerName = "عميل";
-          const lines = text.split('\n');
+        // تجنب التقاط الشاشات الحاوية الكبيرة جداً
+        if (text.length > 500) return;
 
-          for (let line of lines) {
-            if (line.includes('-')) {
-              const parts = line.split('-');
-              const possibleName = parts[0].trim();
-              if (possibleName && !possibleName.startsWith('#')) {
-                customerName = possibleName;
+        let customerName = "عميل";
+        const lines = text.split('\n');
+
+        for (let line of lines) {
+          if (line.includes('-') && (line.includes(cleanPhone.slice(-6)) || line.includes('+'))) {
+            const parts = line.split('-');
+            for (let part of parts) {
+              const cleanPart = part.trim();
+              if (!cleanPart.match(/\d{6,}/) && cleanPart.length > 1 && !cleanPart.startsWith('#')) {
+                customerName = cleanPart;
                 break;
               }
             }
+            break;
           }
+        }
 
-          if (!orders.some(o => o.code === code)) {
-            orders.push({ phone: cleanPhone, name: customerName, code: code });
-          }
+        const isAlreadyAdded = orders.some(o => o.code === code && o.phone === cleanPhone);
+        if (!isAlreadyAdded) {
+          orders.push({
+            phone: cleanPhone,
+            name: customerName,
+            code: code
+          });
         }
       }
     }
@@ -204,5 +238,6 @@ function getOrdersFromCards() {
   return orders;
 }
 
+// التشغيل المباشر والفحص كل 3 ثوانٍ
 highlightAndCheckDuplicates();
 setInterval(highlightAndCheckDuplicates, 3000);
