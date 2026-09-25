@@ -91,8 +91,7 @@ function showInPageToast(phone, name, fingerprint, duration) {
   
   const titleDiv = document.createElement("div");
   titleDiv.style.cssText = "font-size: 15px; font-weight: bold; margin-bottom: 4px; text-align: center;";
-  titleDiv.textContent = `⚠️ تنبيه: تم اكتشاف طلب مكرر للعميل ${name} (${phone})`;
-
+titleDiv.textContent = `🔥 تجربة التحديث التلقائي للعميل ${name} (${phone})`;
   const subDiv = document.createElement("div");
   subDiv.style.cssText = "font-size: 11px; opacity: 0.9; font-weight: normal; text-align: center;";
   subDiv.textContent = `سيختفي هذا التنبيه بعد 60 ثانية`;
