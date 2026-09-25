@@ -14,7 +14,7 @@ function highlightAndCheckDuplicates() {
   // 1. قراءة جميع بطاقات الطلبات من واجهة Kanban
   const orders = getOrdersFromCards();
 
-  // 🔍 طباعة عدد الطلبات المكتشفة في Console للتشخيص التلقائي
+  // 🔍 طباعة عدد الطلبات المكتشفة في Console للتشخيص
   if (orders.length > 0) {
     console.log(`📦 إجمالي الطلبات المكتشفة في الصفحة: ${orders.length}`, orders);
   }
@@ -43,12 +43,11 @@ function highlightAndCheckDuplicates() {
     }
   });
 
-  // 3. التكرار يعتمد فقط على وجود أكثر من طلب (أكثر من بطاقة) لنفس الزبون
+  // 3. التكرار يعتمد فقط على وجود أكثر من طلب لنفس الزبون
   for (const [customerKey, data] of Object.entries(customerToOrdersMap)) {
     if (data.codes.length > 1) {
       console.log(`⚠️ تم كشف طلب مكرر للعميل: ${data.name} (${data.phone}) - الأكواد:`, data.codes);
 
-      // الأكواد تُستخدم فقط كبصمة للتخزين بالذاكرة
       const sortedCodes = [...data.codes].sort().join("_");
       const orderFingerprint = `${customerKey}___${sortedCodes}`;
 
@@ -60,16 +59,15 @@ function highlightAndCheckDuplicates() {
 function handleNotificationLifecycle(phone, name, fingerprint) {
   const storageKey = `notified_perm_${fingerprint}`;
   const DURATION = 30000; // 30 ثانية
-  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 ساعة
 
   const savedTime = localStorage.getItem(storageKey);
 
   if (savedTime) {
-    // إذا مرت أكثر من 24 ساعة، يتم مسح السجل القديم لتفعيل التنبيه مجدداً
     if (Date.now() - parseInt(savedTime, 10) > TWENTY_FOUR_HOURS) {
       localStorage.removeItem(storageKey);
     } else {
-      return; // عدم التكرار إذا لم تتجاوز المدة 24 ساعة
+      return; 
     }
   }
 
@@ -193,48 +191,50 @@ function repositionToasts() {
   });
 }
 
-// 🎯 دالة قراءة الكروت المرنة
+// 🎯 دالة قراءة الكروت الدقيقة والمحدثة وفقاً للواجهة
 function getOrdersFromCards() {
   const orders = [];
 
-  // استهداف جميع العناصر المحتملة للبطاقات
-  const allElements = document.querySelectorAll('div[class*="card"], div[class*="item"], div[class*="order"], tr, section');
+  // جلب كافة النصوص في العناصر الصغيرة الممثلة للبطاقة
+  const allNodes = document.querySelectorAll('*');
 
-  allElements.forEach((el) => {
-    const text = el.innerText || "";
+  allNodes.forEach((node) => {
+    // نتأكد أن النص يحتوي على كود ورقم وأن العنصر ليس حواية رئيسية تحتوي على أكثر من كود
+    if (node.children.length <= 8) {
+      const text = node.innerText || "";
 
-    if (text.includes('#')) {
-      const phoneMatch = text.match(/(?:\+|00)?\d{8,15}/);
-      const codeMatch = text.match(/#[A-Za-z0-9-]+/i);
+      if (text.includes('#') && (text.includes('+') || text.match(/\d{8,}/))) {
+        const phoneMatch = text.match(/(?:\+|00)?\d{8,15}/);
+        const codeMatch = text.match(/#[A-Za-z0-9]+/i);
 
-      if (phoneMatch && codeMatch) {
-        const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
-        const code = codeMatch[0];
+        if (phoneMatch && codeMatch) {
+          const cleanPhone = phoneMatch[0].replace(/[\s-]/g, '');
+          const code = codeMatch[0];
 
-        let customerName = "عميل";
-        const lines = text.split('\n');
+          let customerName = "عميل";
+          const lines = text.split('\n');
 
-        for (let line of lines) {
-          if (line.includes('-') && line.includes(cleanPhone.slice(-6))) {
-            const parts = line.split('-');
-            for (let part of parts) {
-              const cleanPart = part.trim();
-              if (!cleanPart.match(/\d{6,}/) && cleanPart.length > 1) {
-                customerName = cleanPart;
-                break;
+          for (let line of lines) {
+            if (line.includes(cleanPhone) || line.includes('-')) {
+              const parts = line.split('-');
+              if (parts.length > 0) {
+                const potentialName = parts[0].trim();
+                if (potentialName && !potentialName.startsWith('#') && !potentialName.match(/^\d+$/)) {
+                  customerName = potentialName;
+                  break;
+                }
               }
             }
-            break;
           }
-        }
 
-        const isAlreadyAdded = orders.some(o => o.code === code);
-        if (!isAlreadyAdded) {
-          orders.push({
-            phone: cleanPhone,
-            name: customerName,
-            code: code
-          });
+          const isAlreadyAdded = orders.some(o => o.code === code);
+          if (!isAlreadyAdded) {
+            orders.push({
+              phone: cleanPhone,
+              name: customerName,
+              code: code
+            });
+          }
         }
       }
     }
